@@ -1,0 +1,3 @@
+include README.md
+recursive-include src/openai_session_handler *.py
+recursive-include src/openai_session_server *.py
