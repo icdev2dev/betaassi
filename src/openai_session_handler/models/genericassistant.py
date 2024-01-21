@@ -18,6 +18,12 @@ class GenericAssistant(BaseModel):
         return list_assistants
     
     @staticmethod
+    def list_assistants_by_type (assistant_type) :
+        list_assistants = [(x.id, x.name, x.metadata['assistant_type']) for x in client.beta.assistants.list().data if x.metadata['assistant_type'] == assistant_type]
+        
+        return list_assistants
+    
+    @staticmethod
     def retrieve_assistant(assistant_id) -> T :
         for x in client.beta.assistants.list().data : 
 
@@ -28,4 +34,5 @@ class GenericAssistant(BaseModel):
                 else:
                     return None
         return None
+
 

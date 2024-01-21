@@ -1,20 +1,35 @@
 import asyncio
-from openai_session_handler.models.genericassistant import GenericAssistant
+#from openai_session_handler.models.genericassistant import GenericAssistant
+
+from openai_session_handler import list_assistants_by_type
 
 from openai_session_handler.models.assistants.baseassistant import BaseAssistant
 from openai_session_handler.models.stream_thread import StreamThread
-from openai_session_handler.models.messages.streammessage import StreamMessage
 
-async def monitor_assistant(assistant_id):
+REGISTERED_ASSISTANTS = {
 
-    def process_in_seq(base_assistant, st_msgs) :
+}
+
+def _add_registered_assistant( registered_assistant_class ):
+    REGISTERED_ASSISTANTS[registered_assistant_class.__name__] = registered_assistant_class
+
+def _rm_registered_assistant(registered_assistant_class_name):
+    del REGISTERED_ASSISTANTS[registered_assistant_class_name]
+
+def _list_registered_assistants():
+    return [registered_assistant for registered_assistant in REGISTERED_ASSISTANTS.keys()]
+
+
+async def monitor_assistant(Assistant, assistant_id):
+
+    def process_in_seq(assistant, st_msgs) :
         for x in st_msgs:
             sqlish = x.content[0]['value']
-            base_assistant.process_sqlish(sqlish)
+            assistant.process_sqlish(sqlish)
     try:
         while True:
-            base_assistant = BaseAssistant.retrieve(assistant_id=assistant_id)
-            sthread_id = base_assistant.pub_thread
+            assistant = Assistant.retrieve(assistant_id=assistant_id)
+            sthread_id = assistant.pub_thread
             st = StreamThread.retrieve(thread_id=sthread_id)
             print(f"High Water Mark = {st.hwm}")
 
@@ -31,7 +46,7 @@ async def monitor_assistant(assistant_id):
                 while len(st_msgs) > 0:
                     print("batch")
                     after = st_msgs[-1].id
-                    process_in_seq(base_assistant, st_msgs)
+                    process_in_seq(assistant, st_msgs)
                     st.set_hwm(after)
 
                     st_msgs = st.list_messages(limit=3, order="asc", after=after)
@@ -54,7 +69,7 @@ async def monitor_assistant(assistant_id):
                 
                 if len(process_st_msgs) != 0:
                     process_st_msgs = process_st_msgs[::-1]
-                    process_in_seq(base_assistant, process_st_msgs)
+                    process_in_seq(assistant, process_st_msgs)
                     hwm = process_st_msgs[-1].id
                     st.set_hwm(hwm=hwm)
                 else: 
@@ -73,34 +88,28 @@ def check_assistant_for_cud_and_take_action(assistant_id, sthread_id, hwmthread_
 
 
 
-
 async def check_for_entity (entity_list) -> BaseAssistant:
-    for (assistant_id, _, assistant_type)  in GenericAssistant.list_assistants() : 
+    for assistant_type_name, assistant_type in REGISTERED_ASSISTANTS.items():    
+        for (assistant_id, _, _)  in list_assistants_by_type(assistant_type=assistant_type_name) : 
         
-        if assistant_type == "BaseAssistant":
             if assistant_id in entity_list:
-                None
+                return None, None
             else:
-                return assistant_id
-
-    else:
-        return None
-
-
+                return assistant_type, assistant_id
+        else:
+            return None, None
 
 
 async def resource_watcher(task_queue, entity_list):
     try:
         while True:
-            assistant_id = await check_for_entity(entity_list)
+            assistant_type, assistant_id = await check_for_entity(entity_list)
             if assistant_id != None:
-                task = asyncio.create_task(monitor_assistant(assistant_id))
+                task = asyncio.create_task(monitor_assistant(assistant_type, assistant_id))
                 task_queue.append(task)
                 entity_list.append(assistant_id)                
-
             else:
                 pass
-
             await asyncio.sleep(5)  # Interval between checks for new entities
     except Exception as e:
         log_error('ResourceWatcher', e)
@@ -115,12 +124,14 @@ async def main() :
     entity_list = []
 
     watcher_task = asyncio.create_task(resource_watcher(task_queue, entity_list))
-
     task_queue.append(watcher_task)
 
     await asyncio.gather(*task_queue)
 
+def run_main() : 
+    asyncio.run(main())
+
 if __name__ == "__main__":
     print("in main")
-    asyncio.run(main())
+    run_main()
 

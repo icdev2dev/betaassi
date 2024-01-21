@@ -1,15 +1,11 @@
-from ..beta import Beta
 from typing import Optional, Dict,  Type, TypeVar
 from pydantic import Field, field_validator
 
-from ..beta import check_metadata, generic_create,generic_delete, generic_retrieve, generic_update, generic_update_metadata
-
 import openai
+
+from ..beta import Beta
+from ..beta import check_metadata, generic_create,generic_delete, generic_retrieve
 from ..client import client
-
-#from base_message import BaseMessage
-#from base_run import BaseRun
-
 
 
 T = TypeVar('T', bound='MetaThread')
@@ -22,6 +18,8 @@ class MetaThread (Beta):
     object:Optional[str] = None
     created_at: Optional[int] = None
     metadata: Dict[str,str]=Field(default={})
+
+
 
     _check_metadata = field_validator('metadata')(classmethod(check_metadata))
     _do_not_include_at_creation_time = ['id', 'object', 'created_at', 'assistant_id', 'run_id']
@@ -69,8 +67,3 @@ class MetaThread (Beta):
         cls._reference_class_abc = openai.types.beta.thread.Thread
         return generic_delete(cls=cls, thread_id=thread_id)
 
-
-
-
-
-        

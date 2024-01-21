@@ -4,7 +4,29 @@ from typing import Dict, Type, List
 import json
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, root_validator
+
+MAX_LENGTH_OF_METADATA_ATTRIBUTES = 512
+
+
+# Unfortunately these need to be global because there is some funky behaviour with private var in pydantic
+
+LIST_REGISTRY : Dict[str, Type[BaseModel]] = {}
+COMPOSITE_FIELDS:Dict[str, List[str]] = {}
+
+
+def register_composite_fields_and_type( composite_field:str, component_fields:List[str],  component_model: Type[BaseModel]):
+
+
+    if composite_field not in LIST_REGISTRY.keys():
+        LIST_REGISTRY[composite_field] = component_model
+        COMPOSITE_FIELDS[composite_field] = component_fields
+        print(COMPOSITE_FIELDS)
+        print(LIST_REGISTRY)
+
+
+    else:
+        raise Exception(f"{composite_field} already exists in Registry")
 
 
 def check_metadata(cls, v):
@@ -30,9 +52,7 @@ def get_ref_fields(self):
 def get_custom_fields (self):
     
     ref_fields = get_ref_fields(self=self)
-
     cls_fields = set(self.dict())
- 
     return list(cls_fields - ref_fields)
 
 def is_custom_field(self, field_name) -> bool:
@@ -223,10 +243,12 @@ def generic_list_items(cls, **kwargs):
 
 
 class Beta(BaseModel):
+ 
 
-    _list_registry : Dict[str, Type[BaseModel]] = {}
+### SUBBCLASSES THAT WANT  TO SPAN MULTPLE metadata fields in order to overcome the 512 bytes per 
+### metadata field limit must adopt the methodology here
 
-
+        
     def get_storage_attributes(self, list_type: str) -> List[str]:
 
         """
@@ -242,6 +264,56 @@ class Beta(BaseModel):
         for a given list_type.
         """
         raise NotImplementedError
+
+
+### END SUBBCLASSES THAT WANT  TO SPAN MULTPLE metadata fields in order to overcome the 512 bytes per 
+### metadata field limit must adopt the methodology here
+
+        
+
+
+    @root_validator(pre=True)
+    def split_composite_fields(cls, values):
+
+
+        for composite_field, component_fields in COMPOSITE_FIELDS.items():
+            composite_value = values.pop(composite_field, None)
+
+            if composite_value:
+                # so now all that we have to do is to update the values with the values in component_fields
+
+                num_component_fields = len(component_fields)
+
+                compact_ser_composite_value = [x.compact_ser() for x in composite_value]
+                strrep_compact_ser_composite_value = json.dumps(compact_ser_composite_value)
+
+                parts = [strrep_compact_ser_composite_value[i:i + MAX_LENGTH_OF_METADATA_ATTRIBUTES] for i in range(0, len(strrep_compact_ser_composite_value), MAX_LENGTH_OF_METADATA_ATTRIBUTES)]
+
+                if len(parts) > num_component_fields:
+                      raise ValueError(f"String too long: can only store up to {len(num_component_fields)*MAX_LENGTH_OF_METADATA_ATTRIBUTES} characters.")
+                else : 
+                    for i, part in enumerate(parts):
+                        values.update({component_fields[i]: part})
+        
+                values.update()                
+
+        return values
+
+    def get_composite_value(self, composite_field):
+        components = COMPOSITE_FIELDS.get(composite_field, [])
+        return ''.join([getattr(self, field, '') for field in components])
+    
+    def get_composite_property(self, composite_field):
+         j_composite_value = json.loads( self.get_composite_value(composite_field))
+
+         serde_model = LIST_REGISTRY[composite_field]
+
+         l_c = [serde_model.model_validate_json(json.dumps(serde_model.compact_deser(x))) for x in j_composite_value]
+
+         return l_c
+    
+
+
 
 
     def update_storage(self, list_type: str, storage_values: List[str]):
@@ -293,3 +365,19 @@ class Beta(BaseModel):
             else: 
                 return []
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    

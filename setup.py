@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='betaassi',
-    version='0.1.0',  
+    version='0.1.1',  
     author='icdev2dev',
     author_email='icdev2dev@gmail.com',
     description='A Python package to facilitate building applications with OpenAI, including session handling and server functionalities.',
