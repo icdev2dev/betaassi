@@ -1,10 +1,14 @@
 from typing import Optional, Dict,  Type, TypeVar
 from pydantic import Field, field_validator
+import json
 
 import openai
 
+
 from ..beta import Beta
-from ..beta import check_metadata, generic_create,generic_delete, generic_retrieve
+
+
+from ..beta import check_metadata, generic_create,generic_delete, generic_retrieve, generic_update
 from ..client import client
 
 
@@ -67,3 +71,9 @@ class MetaThread (Beta):
         cls._reference_class_abc = openai.types.beta.thread.Thread
         return generic_delete(cls=cls, thread_id=thread_id)
 
+    def update(self, **kwargs) :
+
+        self.__class__._reference_class_abc = openai.types.beta.thread.Thread
+        return generic_update(self, **kwargs)
+
+    

@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from pydantic import BaseModel, Field, field_validator
 import openai
 
-from ..beta import check_metadata,  generic_create, generic_retrieve, generic_update_metadata, generic_list_items
+from ..beta import check_metadata,  generic_create, generic_retrieve, generic_update, generic_list_items
 
 
 from typing import List, Dict, Optional, TypeVar, Type
@@ -34,17 +34,31 @@ class MetaMessage(Beta):
 
     _do_not_include_at_creation_time = ['id', 'object', 'created_at', 'assistant_id', 'run_id']
     _do_not_include_at_update_time = ['id', 'object', 'created_at',  "role", "content",  "file_ids", 'assistant_id', 'run_id']
-    
-    @staticmethod
-    def _create_fn(**kwargs):
-        kwargs = {key:val for key, val in kwargs.items() if val != None or val != ""}
-        content = kwargs['content'][0]['text']['value']
-        
-        kwargs['content'] = content
-        if 'role' not in kwargs:
-            kwargs['role'] = 'user'
+    _custom_field_conversion_at_update_time = [['thread_id', "thread_id"]]
 
-        return client.beta.threads.messages.create(**kwargs)
+
+    @staticmethod
+    def _create_fn( **kwargs):
+
+        thread_id = kwargs.pop("thread_id")
+
+        
+        if thread_id:
+
+            kwargs = {key:val for key, val in kwargs.items() if val != None or val != ""}
+
+
+            if 'content' in kwargs:
+                content = kwargs['content'][0]['text']['value']
+                kwargs['content'] = content
+
+            if 'role' not in kwargs:
+                kwargs['role'] = 'user'            
+
+            return client.beta.threads.messages.create(thread_id, **kwargs)
+        else: 
+            raise ValueError("No thread id specfied in create")
+        
 
     @staticmethod
     def _retrieve_fn(thread_id, message_id):
@@ -56,8 +70,9 @@ class MetaMessage(Beta):
         return kwargs
         
     @staticmethod
-    def _update_fn(thread_id, **kwargs):
-        return client.beta.threads.messages.update(thread_id=thread_id, **kwargs)
+    def _update_fn(message_id, **kwargs):
+
+        return client.beta.threads.messages.update(message_id=message_id, **kwargs)
 
     @staticmethod
     def _list_fn(**kwargs):
@@ -66,8 +81,13 @@ class MetaMessage(Beta):
 
     @classmethod
     def create(cls:Type[T], **kwargs) -> T:
-        content = kwargs['content']
-        kwargs['content'] = [{'type': 'text', 'text': {'annotations': [], 'value': content}}]
+
+    
+        if 'content' in kwargs.keys():
+            content = kwargs['content']
+            kwargs['content'] = [{'type': 'text', 'text': {'annotations': [], 'value': content}}]
+        else:
+            kwargs['content'] = [{'type': 'text', 'text': {'annotations': [], 'value': ''}}]
 
         kwargs['message_type'] = cls.__name__
         
@@ -87,4 +107,8 @@ class MetaMessage(Beta):
 
 
 
+    def update(self, **kwargs) :
+        self.__class__._reference_class_abc = openai.types.beta.threads.thread_message.ThreadMessage
+        return generic_update(self, **kwargs)
+    
     

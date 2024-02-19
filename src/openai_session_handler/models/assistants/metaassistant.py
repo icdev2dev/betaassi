@@ -86,6 +86,12 @@ class MetaAssistant(Beta):
         return generic_delete(cls=cls, assistant_id=assistant_id)
 
 
+    def update(self, **kwargs) :
+        self.__class__._reference_class_abc = openai.types.beta.assistant.Assistant
+
+        return generic_update(self, **kwargs)
+    
+    
 
 
 

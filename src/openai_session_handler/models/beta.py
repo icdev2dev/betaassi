@@ -2,6 +2,7 @@ import typing
 from typing import get_origin, get_args
 from typing import Dict, Type, List
 import json
+import re
 
 
 from pydantic import BaseModel, root_validator
@@ -18,13 +19,12 @@ COMPOSITE_FIELDS:Dict[str, List[str]] = {}
 def register_composite_fields_and_type( composite_field:str, component_fields:List[str],  component_model: Type[BaseModel]):
 
 
+
     if composite_field not in LIST_REGISTRY.keys():
         LIST_REGISTRY[composite_field] = component_model
         COMPOSITE_FIELDS[composite_field] = component_fields
         print(COMPOSITE_FIELDS)
         print(LIST_REGISTRY)
-
-
     else:
         raise Exception(f"{composite_field} already exists in Registry")
 
@@ -47,6 +47,16 @@ def get_ref_fields(self):
         raise TypeError(f"_reference_class must be a class, got {type(reference_class_abc)}")
     ref_fields = set(reference_class_abc.__annotations__)
     return ref_fields
+
+def is_composite_field(self, field_name):
+    if field_name in COMPOSITE_FIELDS.keys():
+        return True
+    else:
+        return False
+
+
+def get_composite_field_attributes(self, field_name) -> List[str]:
+    return COMPOSITE_FIELDS[field_name]
 
 
 def get_custom_fields (self):
@@ -141,23 +151,44 @@ def generic_delete(cls, **kwargs):
     return cls._delete_fn(**kwargs)
 
 
-def generic_update(self):
+def generic_update(self, **kwargs):
+
+    all_annotations = get_all_annotations(self.__class__) 
+
     ref_fields = get_ref_fields(self=self)
     ref_fields = ref_fields - set(self._do_not_include_at_update_time)  
 
-    kwargs = {}
-    for ref_field in ref_fields : 
-        try :
-            ref_field_value = getattr(self, ref_field)
-            print(f" {ref_field}  -- > {ref_field_value}")
+    custom_fields = get_custom_fields(self)
 
-        except AttributeError :
-            pass
-        else:
-            kwargs[ref_field] = ref_field_value
-    print(self.id)
-    print(kwargs)
-    self._update_fn(self.id, **kwargs)
+
+
+
+    metadata = self.metadata
+
+    kwargs_out = {}
+
+    metadata_set = False
+
+    for key, value in kwargs.items():
+        if key in ref_fields:
+            setattr(self, key, value)
+            kwargs_out[key] = value
+
+        elif key in custom_fields:
+            metadata[key] = value
+            setattr(self, key, value)
+            metadata_set = True
+
+    if metadata_set:
+        kwargs_out['metadata'] = metadata
+
+    if hasattr(self, '_custom_field_conversion_at_update_time'): 
+        custom_field_conversion = getattr(self, '_custom_field_conversion_at_update_time')
+        kwargs_out[custom_field_conversion[0][1]] = getattr(self, custom_field_conversion[0][0])
+
+
+
+    self._update_fn(self.id, **kwargs_out)
     
         
 
@@ -195,8 +226,25 @@ def generic_retrieve(cls, **kwargs):
     return from_metadata(base_instance, metadata)
 
 
+
 def generic_create(cls, **kwargs):
+
+    vals_popped = {}
+
+    pattern = r"^_.*"
+
+    for field_name, field_value in kwargs.items():
+        m = re.match(pattern=pattern, string=field_name)
+        if m: 
+            vals_popped[field_name] = field_value
+    
+    for field_name in vals_popped.keys():
+        kwargs.pop(field_name)
+
+
     base_instance = cls(**kwargs)
+
+
     metadata = to_metadata(base_instance)
     base_instance.metadata = metadata
 
@@ -211,7 +259,17 @@ def generic_create(cls, **kwargs):
     for field in base_instance._do_not_include_at_creation_time:
         kwargs_from_base.pop(field, None)
 
-    oai_instance = cls._create_fn(**kwargs_from_base)
+
+    if len(vals_popped) > 0:
+        args  = []
+
+        for item in sorted(vals_popped):
+            args.append(vals_popped[item])
+
+        oai_instance = cls._create_fn(*args, **kwargs_from_base)
+    else:
+
+        oai_instance = cls._create_fn(**kwargs_from_base)
 
     
     base_instance.id = oai_instance.id
@@ -221,60 +279,49 @@ def generic_create(cls, **kwargs):
     return base_instance
 
 
-def generic_list_items(cls, **kwargs):
+def generic_list_items(cls,cls_type, **kwargs):
     raw_items = cls._list_fn(**kwargs)
     ref_cls = cls._reference_class_abc
 
     processed_items = []
     for item in raw_items:
+
         if isinstance(item, ref_cls):
             # Convert to dict and instantiate cls
+
             item_dict = item.dict()
-            processed_item = cls(**item_dict)
+            
+            metadata = item_dict['metadata']
+            base_instance = cls(**item_dict)
+
+            processed_item =  from_metadata(base_instance, metadata)
+
+            if getattr(processed_item, cls_type) == cls.__name__ :
+                processed_items.append(processed_item)
+
+
+
         else:
             # If item is a dictionary, instantiate ref_cls from it and then cls
+            print("IT IS NOT")
+
             ref_instance = ref_cls(**item)
             item_dict = ref_instance.dict()
             processed_item = cls(**item_dict)
-        processed_items.append(processed_item)
+            processed_items.append(processed_item)
 
+        
     return processed_items
-
 
 
 class Beta(BaseModel):
  
 
-### SUBBCLASSES THAT WANT  TO SPAN MULTPLE metadata fields in order to overcome the 512 bytes per 
-### metadata field limit must adopt the methodology here
-
-        
-    def get_storage_attributes(self, list_type: str) -> List[str]:
-
-        """
-        Subclasses should override this method to return specific storage attributes
-        for a given list_type.
-        """
-        raise NotImplementedError
-    
-    def get_serde(self, list_type: str) :
-
-        """
-        Subclasses should override this method to return serializable entitity
-        for a given list_type.
-        """
-        raise NotImplementedError
-
-
-### END SUBBCLASSES THAT WANT  TO SPAN MULTPLE metadata fields in order to overcome the 512 bytes per 
-### metadata field limit must adopt the methodology here
-
-        
-
-
     @root_validator(pre=True)
     def split_composite_fields(cls, values):
 
+#        print(f"in split composite fields {cls} --> {values}")
+        
 
         for composite_field, component_fields in COMPOSITE_FIELDS.items():
             composite_value = values.pop(composite_field, None)
@@ -303,68 +350,45 @@ class Beta(BaseModel):
         components = COMPOSITE_FIELDS.get(composite_field, [])
         return ''.join([getattr(self, field, '') for field in components])
     
-    def get_composite_property(self, composite_field):
-         j_composite_value = json.loads( self.get_composite_value(composite_field))
+    def get_composite_field(self, composite_field):
+         
+         composite_value = self.get_composite_value(composite_field)
 
-         serde_model = LIST_REGISTRY[composite_field]
+         if composite_value == "":
+             return []
+         else:
+            j_composite_value = json.loads(composite_value )
 
-         l_c = [serde_model.model_validate_json(json.dumps(serde_model.compact_deser(x))) for x in j_composite_value]
+            serde_model = LIST_REGISTRY[composite_field]
 
-         return l_c
+            l_c = [serde_model.model_validate_json(json.dumps(serde_model.compact_deser(x))) for x in j_composite_value]
+
+            return l_c
     
 
 
-
-
-    def update_storage(self, list_type: str, storage_values: List[str]):
-        storage_attrs = self.get_storage_attributes(list_type)
-        for attr, value in zip(storage_attrs, storage_values):
-            setattr(self, attr, value)
-
     
+    def save_composite_field(self, composite_field, list_items):
 
-    def save_list(self, list_type, list_items_of_type):
-        _ser_list_items_of_type = [x.compact_ser() for x in list_items_of_type]
-        strrep__list_items_of_type = json.dumps(_ser_list_items_of_type)
-            
-        if list_type in self._list_registry:
-            num_storage_buckets = len(self.get_storage_attributes(list_type=list_type)) 
+        if composite_field in LIST_REGISTRY:
+            ser_list_items = [ x.compact_ser() for x in list_items]
+            strrep_list_items = json.dumps(ser_list_items)
+
+            num_storage_buckets = len(COMPOSITE_FIELDS[composite_field])
+
 
             max_length = 512  # maximum length for each attribute
-            parts = [strrep__list_items_of_type[i:i + max_length] for i in range(0, len(strrep__list_items_of_type), max_length)]
+            parts = [strrep_list_items[i:i + max_length] for i in range(0, len(strrep_list_items), max_length)]
             if len(parts) > num_storage_buckets:
                 raise ValueError(f"String too long: can only store up to {len(num_storage_buckets)*max_length} characters.")
 
-            self.update_storage(list_type=list_type, storage_values=parts)
-        
-        generic_update_metadata(self=self)
+            for attr,value in zip(COMPOSITE_FIELDS[composite_field], parts):
+                setattr(self, attr, value)
 
-
-
-        
-    def load_list(self, list_type):
-        if list_type in self._list_registry:
-
-            strrep__list_items_of_type =  ''.join([getattr(self, x) for x in self.get_storage_attributes(list_type=list_type)])
-        
-
-            if len(strrep__list_items_of_type) != 0: 
-
-                json_loads = json.loads(strrep__list_items_of_type)
-                ret_list = []
-
-                for x in json_loads:
-                    serde_class = self.get_serde(list_type=list_type)
-
-                    serde_instance = serde_class.compact_deser(x)
-
-                    serde_instance_class = serde_class.model_validate_json(json.dumps(serde_instance) )
-                    ret_list.append(serde_instance_class)
-                    
-                return ret_list
-            else: 
-                return []
-
+            generic_update_metadata(self=self)
+        else:
+            raise ValueError(f"{composite_field} is NOT registered in LIST_REGISTRY")
+            
 
 
 
