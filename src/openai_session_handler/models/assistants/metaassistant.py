@@ -1,11 +1,11 @@
 
-from ..beta import Beta
+from ..beta import Beta, check_metadata
 from pydantic import Field, field_validator
-from ..session import Session
-from typing import List, Optional, Dict, Type, TypeVar
+from typing import  Optional, Dict, Type, TypeVar, List
 from ..client import client
 
-from ..beta import check_metadata,  generic_create, generic_retrieve, generic_update_metadata, generic_update, generic_delete, is_custom_field
+
+
 import openai
 
 
@@ -69,7 +69,7 @@ class MetaAssistant(Beta):
     @classmethod
     def create(cls:Type[T], **kwargs) -> T:
         cls._reference_class_abc = openai.types.beta.assistant.Assistant 
-        return generic_create(cls, **kwargs)
+        return cls.generic_create(**kwargs)
     
 
     @classmethod
@@ -77,22 +77,36 @@ class MetaAssistant(Beta):
 
         cls._custom_convert_for_retrieval = cls._custom_convert_for_retrieval
         cls._reference_class_abc = openai.types.beta.assistant.Assistant
-        return generic_retrieve(cls, assistant_id=assistant_id)
+        return cls.generic_retrieve( assistant_id=assistant_id)
 
 
     @classmethod
     def delete(cls:Type[T], assistant_id):
         cls._reference_class_abc = openai.types.beta.assistant.Assistant
-        return generic_delete(cls=cls, assistant_id=assistant_id)
+        return cls.generic_delete( assistant_id=assistant_id)
+
+
+    @classmethod
+    def list(cls:Type[T], **kwargs) -> List[T]:
+        cls._reference_class_abc = openai.types.beta.assistant.Assistant
+        return cls.generic_list_items("assistant_type",  **kwargs)
 
 
     def update(self, **kwargs) :
         self.__class__._reference_class_abc = openai.types.beta.assistant.Assistant
-
-        return generic_update(self, **kwargs)
+        return self.generic_update( **kwargs)
     
     
 
+    def __init__(self, **data):
+        
+        if 'instructions' not in data:
+            if self.__doc__ is not None:
+                data['instructions'] = self.__doc__
+            else:
+                data['instructions'] = "NO INSTRUCTIONS IN CLASS DOC"
+
+        super().__init__(**data)
 
 
 

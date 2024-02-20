@@ -1,22 +1,13 @@
 from .metaassistant import MetaAssistant
-from ..threads.basethread import BaseThread
 
-from pydantic import BaseModel, Field, field_validator, ValidationError
-from typing import Dict, List, Optional, TypeVar, Type
-import re
-
+from pydantic import  Field
+from typing import  Optional, TypeVar, Type
 
 import openai.types.beta
  
 
-from ..beta import  generic_create, generic_retrieve, generic_delete, generic_list_items
-from ..beta import generic_update
-
 
 from ..openai_functions import describe_all_openai_functions
-from ..stream_thread import StreamThread
-from ..session import Session
-from ..client import client
 
 T = TypeVar('T', bound='BaseAssistant')
 
@@ -33,41 +24,16 @@ class BaseAssistant (MetaAssistant):
     def create(cls:Type[T], **kwargs) -> T:
         kwargs['assistant_type'] = cls.__name__
         cls._reference_class_abc = openai.types.beta.assistant.Assistant 
-        return generic_create(cls, **kwargs)
+        return cls.generic_create( **kwargs)
     
 
-    @classmethod
-    def retrieve(cls:Type[T], assistant_id) -> T:
-
-        cls._custom_convert_for_retrieval = super()._custom_convert_for_retrieval
-        cls._reference_class_abc = openai.types.beta.assistant.Assistant
-        return generic_retrieve(cls, assistant_id=assistant_id)
 
 
-    @classmethod
-    def delete(cls:Type[T], assistant_id):
-#        _a = cls.retrieve(assistant_id=assistant_id)
 
-        cls._reference_class_abc = openai.types.beta.assistant.Assistant
-        return generic_delete(cls=cls, assistant_id=assistant_id)
-
-    @classmethod
-    def list(cls:Type[T], **kwargs):
-        cls._reference_class_abc = openai.types.beta.assistant.Assistant
-        return generic_list_items(cls,"assistant_type",  **kwargs)
 
             
 
-    def __init__(self, **data):
-        
-        if 'instructions' not in data:
-            if self.__doc__ is not None:
-                data['instructions'] = self.__doc__
-            else:
-                data['instructions'] = "NO INSTRUCTIONS IN CLASS DOC"
-
-        super().__init__(**data)
-
+  
 
 
 

@@ -1,10 +1,8 @@
 from ..beta import Beta
-from pydantic import BaseModel, Field
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 import openai
 
-from ..beta import check_metadata,  generic_create, generic_retrieve, generic_update, generic_list_items
-
+from ..beta import check_metadata
 
 from typing import List, Dict, Optional, TypeVar, Type
 
@@ -92,23 +90,23 @@ class MetaMessage(Beta):
         kwargs['message_type'] = cls.__name__
         
         cls._reference_class_abc = openai.types.beta.threads.thread_message.ThreadMessage 
-        return generic_create(cls, **kwargs)
+        return cls.generic_create( **kwargs)
     
     @classmethod
     def retrieve(cls:Type[T], thread_id, message_id) -> T:
         cls._custom_convert_for_retrieval = cls._custom_convert_for_retrieval
         cls._reference_class_abc = openai.types.beta.threads.thread_message.ThreadMessage
-        return generic_retrieve(cls, thread_id=thread_id, message_id=message_id)
+        return cls.generic_retrieve( thread_id=thread_id, message_id=message_id)
 
     @classmethod
     def list(cls, **kwargs):
         cls._reference_class_abc = openai.types.beta.threads.thread_message.ThreadMessage
-        return generic_list_items(cls, **kwargs)
+        return cls.generic_list_items( **kwargs)
 
 
 
     def update(self, **kwargs) :
         self.__class__._reference_class_abc = openai.types.beta.threads.thread_message.ThreadMessage
-        return generic_update(self, **kwargs)
+        return self.generic_update( **kwargs)
     
     

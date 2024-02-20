@@ -16,19 +16,6 @@ LIST_REGISTRY : Dict[str, Type[BaseModel]] = {}
 COMPOSITE_FIELDS:Dict[str, List[str]] = {}
 
 
-def register_composite_fields_and_type( composite_field:str, component_fields:List[str],  component_model: Type[BaseModel]):
-
-
-
-    if composite_field not in LIST_REGISTRY.keys():
-        LIST_REGISTRY[composite_field] = component_model
-        COMPOSITE_FIELDS[composite_field] = component_fields
-        print(COMPOSITE_FIELDS)
-        print(LIST_REGISTRY)
-    else:
-        raise Exception(f"{composite_field} already exists in Registry")
-
-
 def check_metadata(cls, v):
     '''Check on metdata according to the recent documentation on openai'''
     if len(v) > 16:
@@ -41,68 +28,20 @@ def check_metadata(cls, v):
             raise ValueError('Values must be a maximum of 512 characters')
     return v
 
-def get_ref_fields(self):
-    reference_class_abc = self.__class__._reference_class_abc
-    if not isinstance(reference_class_abc, type):
-        raise TypeError(f"_reference_class must be a class, got {type(reference_class_abc)}")
-    ref_fields = set(reference_class_abc.__annotations__)
-    return ref_fields
 
-def is_composite_field(self, field_name):
-    if field_name in COMPOSITE_FIELDS.keys():
-        return True
+def register_composite_fields_and_type( composite_field:str, component_fields:List[str],  component_model: Type[BaseModel]):
+
+
+
+    if composite_field not in LIST_REGISTRY.keys():
+        LIST_REGISTRY[composite_field] = component_model
+        COMPOSITE_FIELDS[composite_field] = component_fields
+#        print(COMPOSITE_FIELDS)
+#        print(LIST_REGISTRY)
     else:
-        return False
+        raise Exception(f"{composite_field} already exists in Registry")
 
 
-def get_composite_field_attributes(self, field_name) -> List[str]:
-    return COMPOSITE_FIELDS[field_name]
-
-
-def get_custom_fields (self):
-    
-    ref_fields = get_ref_fields(self=self)
-    cls_fields = set(self.dict())
-    return list(cls_fields - ref_fields)
-
-def is_custom_field(self, field_name) -> bool:
-    if field_name in get_custom_fields(self=self):
-        return True
-    else:
-        return False
-    
-
-def get_all_annotations(cls):
-    annotations = {}
-    for base_class in reversed(cls.__mro__):
-        if issubclass(base_class, BaseModel) and hasattr(base_class, '__annotations__'):
-            annotations.update(base_class.__annotations__)
-    return annotations
-
-
-def to_metadata(self) -> Dict[str, str]:
-    metadata = {}
-    custom_fields = get_custom_fields(self)
-
-    for custom_field in custom_fields:
-        if self.__dict__[custom_field] != None:
-            metadata[custom_field] = self.__dict__[custom_field]
-    return metadata
-
-
-def from_metadata(self, metadata):
-    
-    self.metadata = metadata
-    custom_fields = get_custom_fields(self)
-
-    all_annotations = get_all_annotations(self.__class__) 
-    for custom_field in custom_fields:
-        if custom_field in metadata:
-
-            field_type = all_annotations[custom_field]
-            casted_value = cast_to_field_type(metadata[custom_field], field_type)
-            setattr(self, custom_field, casted_value)
-    return self
 
        
 
@@ -146,181 +85,15 @@ def cast_to_field_type(value, field_type):
             raise ValueError(f"Cannot cast {value} to {field_type}: {e}")
 
 
-
-def generic_delete(cls, **kwargs):
-    return cls._delete_fn(**kwargs)
-
-
-def generic_update(self, **kwargs):
-
-    all_annotations = get_all_annotations(self.__class__) 
-
-    ref_fields = get_ref_fields(self=self)
-    ref_fields = ref_fields - set(self._do_not_include_at_update_time)  
-
-    custom_fields = get_custom_fields(self)
-
-
-
-
-    metadata = self.metadata
-
-    kwargs_out = {}
-
-    metadata_set = False
-
-    for key, value in kwargs.items():
-        if key in ref_fields:
-            setattr(self, key, value)
-            kwargs_out[key] = value
-
-        elif key in custom_fields:
-            metadata[key] = value
-            setattr(self, key, value)
-            metadata_set = True
-
-    if metadata_set:
-        kwargs_out['metadata'] = metadata
-
-    if hasattr(self, '_custom_field_conversion_at_update_time'): 
-        custom_field_conversion = getattr(self, '_custom_field_conversion_at_update_time')
-        kwargs_out[custom_field_conversion[0][1]] = getattr(self, custom_field_conversion[0][0])
-
-
-
-    self._update_fn(self.id, **kwargs_out)
-    
         
 
-def generic_update_metadata(self):
-    metadata = to_metadata(self=self)
-    self.metadata = metadata
-    self._update_fn(self.id, metadata=metadata)
     
-
-
-def generic_retrieve(cls, **kwargs):
-
-    def get_field_value(model_instance, field_name):
-        return getattr(model_instance, field_name, None)
-
-    all_annotations = get_all_annotations(cls=cls)
-
-    cls_fields = set(all_annotations)
-    retrieved_data = cls._retrieve_fn(**kwargs)
-
-    metadata = retrieved_data.metadata
-
-    kwargs = {}
-
-    for key in cls_fields: 
-        val = get_field_value(retrieved_data, key)
-        if val != None:
-            kwargs[key] = val
-    
-
-    kwargs = cls._custom_convert_for_retrieval(kwargs)    
-
-    base_instance = cls(**kwargs)
-
-    return from_metadata(base_instance, metadata)
-
-
-
-def generic_create(cls, **kwargs):
-
-    vals_popped = {}
-
-    pattern = r"^_.*"
-
-    for field_name, field_value in kwargs.items():
-        m = re.match(pattern=pattern, string=field_name)
-        if m: 
-            vals_popped[field_name] = field_value
-    
-    for field_name in vals_popped.keys():
-        kwargs.pop(field_name)
-
-
-    base_instance = cls(**kwargs)
-
-
-    metadata = to_metadata(base_instance)
-    base_instance.metadata = metadata
-
-    kwargs_from_base = {key: val for key, val in base_instance.__dict__.items()}
-
-    custom_fields = get_custom_fields(base_instance)
-    for custom_field in custom_fields:
-        if custom_field in kwargs_from_base:
-            del kwargs_from_base[custom_field]
-
-    # Delete specific fields
-    for field in base_instance._do_not_include_at_creation_time:
-        kwargs_from_base.pop(field, None)
-
-
-    if len(vals_popped) > 0:
-        args  = []
-
-        for item in sorted(vals_popped):
-            args.append(vals_popped[item])
-
-        oai_instance = cls._create_fn(*args, **kwargs_from_base)
-    else:
-
-        oai_instance = cls._create_fn(**kwargs_from_base)
-
-    
-    base_instance.id = oai_instance.id
-    base_instance.object = oai_instance.object
-    base_instance.created_at = oai_instance.created_at
-
-    return base_instance
-
-
-def generic_list_items(cls,cls_type, **kwargs):
-    raw_items = cls._list_fn(**kwargs)
-    ref_cls = cls._reference_class_abc
-
-    processed_items = []
-    for item in raw_items:
-
-        if isinstance(item, ref_cls):
-            # Convert to dict and instantiate cls
-
-            item_dict = item.dict()
-            
-            metadata = item_dict['metadata']
-            base_instance = cls(**item_dict)
-
-            processed_item =  from_metadata(base_instance, metadata)
-
-            if getattr(processed_item, cls_type) == cls.__name__ :
-                processed_items.append(processed_item)
-
-
-
-        else:
-            # If item is a dictionary, instantiate ref_cls from it and then cls
-            print("IT IS NOT")
-
-            ref_instance = ref_cls(**item)
-            item_dict = ref_instance.dict()
-            processed_item = cls(**item_dict)
-            processed_items.append(processed_item)
-
-        
-    return processed_items
-
-
 class Beta(BaseModel):
  
 
     @root_validator(pre=True)
     def split_composite_fields(cls, values):
 
-#        print(f"in split composite fields {cls} --> {values}")
         
 
         for composite_field, component_fields in COMPOSITE_FIELDS.items():
@@ -345,6 +118,171 @@ class Beta(BaseModel):
                 values.update()                
 
         return values
+
+
+    @classmethod
+    def generic_create(cls, **kwargs):
+
+        vals_popped = {}
+
+        pattern = r"^_.*"
+
+        for field_name, field_value in kwargs.items():
+            m = re.match(pattern=pattern, string=field_name)
+            if m: 
+                vals_popped[field_name] = field_value
+        
+        for field_name in vals_popped.keys():
+            kwargs.pop(field_name)
+
+
+        base_instance = cls(**kwargs)
+
+
+        metadata = base_instance.to_metadata()
+        base_instance.metadata = metadata
+
+        kwargs_from_base = {key: val for key, val in base_instance.__dict__.items()}
+
+        custom_fields = base_instance.get_custom_fields()
+        for custom_field in custom_fields:
+            if custom_field in kwargs_from_base:
+                del kwargs_from_base[custom_field]
+
+        # Delete specific fields
+        for field in base_instance._do_not_include_at_creation_time:
+            kwargs_from_base.pop(field, None)
+
+
+        if len(vals_popped) > 0:
+            args  = []
+
+            for item in sorted(vals_popped):
+                args.append(vals_popped[item])
+
+            oai_instance = cls._create_fn(*args, **kwargs_from_base)
+        else:
+
+            oai_instance = cls._create_fn(**kwargs_from_base)
+
+        
+        base_instance.id = oai_instance.id
+        base_instance.object = oai_instance.object
+        base_instance.created_at = oai_instance.created_at
+
+        return base_instance
+
+
+
+    @classmethod
+    def generic_list_items(cls,cls_type, **kwargs):
+        raw_items = cls._list_fn(**kwargs)
+        ref_cls = cls._reference_class_abc
+
+        processed_items = []
+        for item in raw_items:
+
+            if isinstance(item, ref_cls):
+                # Convert to dict and instantiate cls
+
+                item_dict = item.dict()
+                
+                metadata = item_dict['metadata']
+                base_instance = cls(**item_dict)
+
+                processed_item =  base_instance.from_metadata( metadata)
+
+                if getattr(processed_item, cls_type) == cls.__name__ :
+                    processed_items.append(processed_item)
+
+
+
+            else:
+                # If item is a dictionary, instantiate ref_cls from it and then cls
+                print("IT IS NOT")
+
+                ref_instance = ref_cls(**item)
+                item_dict = ref_instance.dict()
+                processed_item = cls(**item_dict)
+                processed_items.append(processed_item)
+
+            
+        return processed_items
+
+
+    @classmethod
+    def generic_retrieve(cls, **kwargs):
+
+        def get_field_value(model_instance, field_name):
+            return getattr(model_instance, field_name, None)
+
+        all_annotations = cls.get_all_annotations()
+
+        cls_fields = set(all_annotations)
+        retrieved_data = cls._retrieve_fn(**kwargs)
+
+        metadata = retrieved_data.metadata
+
+        kwargs = {}
+
+        for key in cls_fields: 
+            val = get_field_value(retrieved_data, key)
+            if val != None:
+                kwargs[key] = val
+        
+
+        kwargs = cls._custom_convert_for_retrieval(kwargs)    
+
+        base_instance = cls(**kwargs)
+
+        return base_instance.from_metadata( metadata)
+
+
+
+    @classmethod
+    def generic_delete(cls, **kwargs):
+        return cls._delete_fn(**kwargs)
+
+
+    def generic_update(self, **kwargs):
+
+
+        ref_fields = self.get_ref_fields()
+        ref_fields = ref_fields - set(self._do_not_include_at_update_time)  
+
+        custom_fields = self.get_custom_fields()
+
+        metadata = self.metadata
+
+        kwargs_out = {}
+
+        metadata_set = False
+
+        for key, value in kwargs.items():
+            if key in ref_fields:
+                setattr(self, key, value)
+                kwargs_out[key] = value
+
+            elif key in custom_fields:
+                metadata[key] = value
+                setattr(self, key, value)
+                metadata_set = True
+
+        if metadata_set:
+            kwargs_out['metadata'] = metadata
+
+        if hasattr(self, '_custom_field_conversion_at_update_time'): 
+            custom_field_conversion = getattr(self, '_custom_field_conversion_at_update_time')
+            kwargs_out[custom_field_conversion[0][1]] = getattr(self, custom_field_conversion[0][0])
+
+
+
+        self._update_fn(self.id, **kwargs_out)
+        
+
+
+
+
 
     def get_composite_value(self, composite_field):
         components = COMPOSITE_FIELDS.get(composite_field, [])
@@ -385,23 +323,79 @@ class Beta(BaseModel):
             for attr,value in zip(COMPOSITE_FIELDS[composite_field], parts):
                 setattr(self, attr, value)
 
-            generic_update_metadata(self=self)
+            self.generic_update_metadata()
         else:
             raise ValueError(f"{composite_field} is NOT registered in LIST_REGISTRY")
             
 
+    def get_ref_fields(self):
+        reference_class_abc = self.__class__._reference_class_abc
+        if not isinstance(reference_class_abc, type):
+            raise TypeError(f"_reference_class must be a class, got {type(reference_class_abc)}")
+        ref_fields = set(reference_class_abc.__annotations__)
+        return ref_fields
+
+    def is_composite_field(self, field_name):
+        if field_name in COMPOSITE_FIELDS.keys():
+            return True
+        else:
+            return False
+
+
+    def get_composite_field_attributes(self, field_name) -> List[str]:
+        return COMPOSITE_FIELDS[field_name]
+
+
+    def get_custom_fields (self):
+        
+        ref_fields = self.get_ref_fields()
+        cls_fields = set(self.dict())
+        return list(cls_fields - ref_fields)
+
+    def is_custom_field(self, field_name) -> bool:
+        if field_name in self.get_custom_fields():
+            return True
+        else:
+            return False
+        
+    @classmethod
+    def get_all_annotations(cls):
+        annotations = {}
+        for base_class in reversed(cls.__mro__):
+            if issubclass(base_class, BaseModel) and hasattr(base_class, '__annotations__'):
+                annotations.update(base_class.__annotations__)
+        return annotations
+
+
+    def to_metadata(self) -> Dict[str, str]:
+        metadata = {}
+        custom_fields = self.get_custom_fields()
+
+        for custom_field in custom_fields:
+            if self.__dict__[custom_field] != None:
+                metadata[custom_field] = self.__dict__[custom_field]
+        return metadata
+
+
+    def from_metadata(self, metadata):
+        
+        self.metadata = metadata
+        custom_fields = self.get_custom_fields()
+
+        all_annotations = self.__class__.get_all_annotations() 
+
+        for custom_field in custom_fields:
+            if custom_field in metadata:
+
+                field_type = all_annotations[custom_field]
+                casted_value = cast_to_field_type(metadata[custom_field], field_type)
+                setattr(self, custom_field, casted_value)
+        return self
+
+    def generic_update_metadata(self):
+        metadata = self.to_metadata()
+        self.metadata = metadata
+        self._update_fn(self.id, metadata=metadata)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-    

@@ -8,7 +8,7 @@ import openai
 from ..beta import Beta
 
 
-from ..beta import check_metadata, generic_create,generic_delete, generic_retrieve, generic_update
+from ..beta import check_metadata
 from ..client import client
 
 
@@ -57,23 +57,23 @@ class MetaThread (Beta):
         cls._reference_class_abc = openai.types.beta.thread.Thread 
         kwargs['thread_type'] = cls.__name__
 
-        return generic_create(cls, **kwargs)
+        return cls.generic_create( **kwargs)
     
     @classmethod
     def retrieve(cls:Type[T], thread_id) -> T:
 
         cls._custom_convert_for_retrieval = cls._custom_convert_for_retrieval
         cls._reference_class_abc = openai.types.beta.thread.Thread
-        return generic_retrieve(cls, thread_id=thread_id)
+        return cls.generic_retrieve( thread_id=thread_id)
 
     @classmethod
     def delete(cls:Type[T], thread_id) :
         cls._reference_class_abc = openai.types.beta.thread.Thread
-        return generic_delete(cls=cls, thread_id=thread_id)
+        return cls.generic_delete( thread_id=thread_id)
 
     def update(self, **kwargs) :
 
         self.__class__._reference_class_abc = openai.types.beta.thread.Thread
-        return generic_update(self, **kwargs)
+        return self.generic_update( **kwargs)
 
     
