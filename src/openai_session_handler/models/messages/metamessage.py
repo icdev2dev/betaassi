@@ -53,6 +53,9 @@ class MetaMessage(Beta):
             if 'role' not in kwargs:
                 kwargs['role'] = 'user'            
 
+#            print(thread_id)
+#            print(kwargs)
+            
             return client.beta.threads.messages.create(thread_id, **kwargs)
         else: 
             raise ValueError("No thread id specfied in create")
@@ -84,6 +87,7 @@ class MetaMessage(Beta):
         if 'content' in kwargs.keys():
             content = kwargs['content']
             kwargs['content'] = [{'type': 'text', 'text': {'annotations': [], 'value': content}}]
+#            print( kwargs['content'])
         else:
             kwargs['content'] = [{'type': 'text', 'text': {'annotations': [], 'value': ''}}]
 
@@ -101,7 +105,7 @@ class MetaMessage(Beta):
     @classmethod
     def list(cls, **kwargs):
         cls._reference_class_abc = openai.types.beta.threads.thread_message.ThreadMessage
-        return cls.generic_list_items( **kwargs)
+        return cls.generic_list_items( 'message_type', **kwargs)
 
 
 
