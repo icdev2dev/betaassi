@@ -176,8 +176,15 @@ class Beta(BaseModel):
 
     @classmethod
     def generic_list_items(cls,cls_type, **kwargs):
+        ignore_cls_type = None
+
+        if 'ignore_cls_type' in kwargs:
+            ignore_cls_type = kwargs.pop('ignore_cls_type')
+
         raw_items = cls._list_fn(**kwargs)
         ref_cls = cls._reference_class_abc
+
+
 
         processed_items = []
         for item in raw_items:
@@ -186,7 +193,7 @@ class Beta(BaseModel):
                 # Convert to dict and instantiate cls
 
                 item_dict = item.dict()
-                
+
                 metadata = item_dict['metadata']
                 base_instance = cls(**item_dict)
 
@@ -194,8 +201,8 @@ class Beta(BaseModel):
 
                 if getattr(processed_item, cls_type) == cls.__name__ :
                     processed_items.append(processed_item)
-
-
+                elif ignore_cls_type:
+                    processed_items.append(processed_item)
 
             else:
                 # If item is a dictionary, instantiate ref_cls from it and then cls

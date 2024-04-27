@@ -2,6 +2,9 @@ from ..beta import Beta
 from pydantic import Field, field_validator
 import openai
 
+
+from openai.types.beta.threads.message import Message
+
 from ..beta import check_metadata
 
 from typing import List, Dict, Optional, TypeVar, Type
@@ -87,30 +90,27 @@ class MetaMessage(Beta):
         if 'content' in kwargs.keys():
             content = kwargs['content']
             kwargs['content'] = [{'type': 'text', 'text': {'annotations': [], 'value': content}}]
-#            print( kwargs['content'])
         else:
             kwargs['content'] = [{'type': 'text', 'text': {'annotations': [], 'value': ''}}]
 
         kwargs['message_type'] = cls.__name__
         
-        cls._reference_class_abc = openai.types.beta.threads.thread_message.ThreadMessage 
+        cls._reference_class_abc = Message 
         return cls.generic_create( **kwargs)
     
     @classmethod
     def retrieve(cls:Type[T], thread_id, message_id) -> T:
         cls._custom_convert_for_retrieval = cls._custom_convert_for_retrieval
-        cls._reference_class_abc = openai.types.beta.threads.thread_message.ThreadMessage
+        cls._reference_class_abc = Message
         return cls.generic_retrieve( thread_id=thread_id, message_id=message_id)
 
     @classmethod
     def list(cls, **kwargs):
-        cls._reference_class_abc = openai.types.beta.threads.thread_message.ThreadMessage
+        cls._reference_class_abc = Message
         return cls.generic_list_items( 'message_type', **kwargs)
 
-
-
     def update(self, **kwargs) :
-        self.__class__._reference_class_abc = openai.types.beta.threads.thread_message.ThreadMessage
+        self.__class__._reference_class_abc = Message
         return self.generic_update( **kwargs)
     
     
