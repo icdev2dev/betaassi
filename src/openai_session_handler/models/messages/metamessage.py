@@ -75,13 +75,16 @@ class MetaMessage(Beta):
         
     @staticmethod
     def _update_fn(message_id, **kwargs):
-
         return client.beta.threads.messages.update(message_id=message_id, **kwargs)
 
     @staticmethod
     def _list_fn(**kwargs):
         return client.beta.threads.messages.list(**kwargs)
     
+    @staticmethod
+    def _delete_fn(thread_id, message_id):
+        return client.beta.threads.messages.delete(thread_id=thread_id, message_id=message_id)
+
 
     @classmethod
     def create(cls:Type[T], **kwargs) -> T:
@@ -98,6 +101,10 @@ class MetaMessage(Beta):
         cls._reference_class_abc = Message 
         return cls.generic_create( **kwargs)
     
+    @classmethod 
+    def delete(cls:Type[T], **kwargs): 
+        return cls.generic_delete(thread_id=kwargs['thread_id'], message_id=kwargs['message_id'])
+
     @classmethod
     def retrieve(cls:Type[T], thread_id, message_id) -> T:
         cls._custom_convert_for_retrieval = cls._custom_convert_for_retrieval
