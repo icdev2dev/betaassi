@@ -51,7 +51,6 @@ class MetaThread (Beta):
     def _delete_fn(thread_id, **kwargs):
         return client.beta.threads.delete(thread_id=thread_id)
     
-        
     @classmethod
     def create(cls:Type[T], **kwargs) -> T:
         cls._reference_class_abc = openai.types.beta.thread.Thread 

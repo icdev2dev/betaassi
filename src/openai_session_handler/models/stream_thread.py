@@ -25,11 +25,10 @@ class StreamThread (BaseThread):
     def set_hwm (self, hwm: str) :
         self.hwm = hwm
         self.generic_update_metadata()
-        
 
     def _reset_hwm(self):
         """ only for experimentation"""
         self.hwm = ""
         
-        generic_update_metadata(self=self)
+        self.generic_update_metadata()
 

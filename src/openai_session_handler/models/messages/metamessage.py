@@ -27,13 +27,17 @@ class MetaMessage(Beta):
 
     assistant_id: Optional[str] = Field(default="")
     run_id: Optional[str] = Field(default="")
-    
+    incomplete_details: Optional[str] = Field(default="")
+    incomplete_at: Optional[int] = None
+    completed_at:Optional[int] = None
+    status: Optional[str] = Field(default="")
+
 #    file_ids: Optional[List[str]] = Field(default=None)
 
 
     _check_metadata = field_validator('metadata')(classmethod(check_metadata))
 
-    _do_not_include_at_creation_time = ['id', 'object', 'created_at', 'assistant_id', 'run_id']
+    _do_not_include_at_creation_time = ['id', 'object', 'created_at', 'assistant_id', 'run_id', 'incomplete_details', 'incomplete_at', 'completed_at', 'status']
     _do_not_include_at_update_time = ['id', 'object', 'created_at',  "role", "content",  "file_ids", 'assistant_id', 'run_id']
     _custom_field_conversion_at_update_time = [['thread_id', "thread_id"]]
 
@@ -56,8 +60,6 @@ class MetaMessage(Beta):
             if 'role' not in kwargs:
                 kwargs['role'] = 'user'            
 
-#            print(thread_id)
-#            print(kwargs)
             
             return client.beta.threads.messages.create(thread_id, **kwargs)
         else: 
@@ -89,12 +91,14 @@ class MetaMessage(Beta):
     @classmethod
     def create(cls:Type[T], **kwargs) -> T:
 
-    
+        if 'role' not in kwargs.keys():
+            kwargs['role'] = "user"
+
         if 'content' in kwargs.keys():
             content = kwargs['content']
             kwargs['content'] = [{'type': 'text', 'text': {'annotations': [], 'value': content}}]
         else:
-            kwargs['content'] = [{'type': 'text', 'text': {'annotations': [], 'value': ''}}]
+            kwargs['content'] = [{'type': 'text', 'text': {'annotations': [], 'value': ' '}}]
 
         kwargs['message_type'] = cls.__name__
         

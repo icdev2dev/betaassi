@@ -106,7 +106,8 @@ class MetaAssistant(Beta):
             else:
                 data['instructions'] = "NO INSTRUCTIONS IN CLASS DOC"
         
-        data['description'] = "No description"
+        if 'description' not in data: 
+            data['description'] = "No description"
         super().__init__(**data)
 
 
