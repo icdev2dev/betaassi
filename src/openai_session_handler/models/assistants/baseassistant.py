@@ -20,6 +20,9 @@ class BaseAssistant (MetaAssistant):
     pub_thread:Optional[str] = Field(default="")
 
 
+    def __json__(self):
+        return dict(self)
+    
 
     @classmethod
     def create(cls:Type[T], **kwargs) -> T:

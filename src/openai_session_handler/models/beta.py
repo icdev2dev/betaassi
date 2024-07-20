@@ -163,6 +163,7 @@ class Beta(BaseModel):
             oai_instance = cls._create_fn(*args, **kwargs_from_base)
         else:
 
+
             oai_instance = cls._create_fn(**kwargs_from_base)
 
         
